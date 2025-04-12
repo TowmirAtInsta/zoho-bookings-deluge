@@ -1,0 +1,84 @@
+// create contact, meetings and deal from zoho bookings appointment
+workspace_name = bookingInfo.get("workspace_name");
+firstname = bookingInfo.get("customer_first_name");
+lastname = bookingInfo.get("customer_last_name");
+phone = bookingInfo.get("customer_contact_no");
+Email = bookingInfo.get("customer_email");
+mailing_country = bookingInfo.get("customer_more_info").get("Country");
+country = bookingInfo.get("customer_more_info").get("Country of Residence");
+countrylist = {country};
+booking_id = bookingInfo.get("booking_id");
+start_time =
+bookingInfo.get("customer_booking_start_time").totime().tostring("yyyy-MM-dd'T'HH:mm:ss");
+duration = bookingInfo.get("duration").getPrefix(" mins").toLong();
+end_time =
+bookingInfo.get("customer_booking_start_time").toTime().addMinutes(duration).toString("yyyy-MM-dd'T'HH:mm:ss");
+street = bookingInfo.get("customer_more_info").get("Street Name and Number (for shipping test kit)");
+city = bookingInfo.get("customer_more_info").get("City");
+zip = bookingInfo.get("customer_more_info").get("Post Code");
+Booking_Summary_URL = bookingInfo.get("summary_url");
+Staff_Name = bookingInfo.get("staff_name");
+Service_Name = bookingInfo.get("service_name");
+Amount = bookingInfo.get("cost_paid");
+Dob = bookingInfo.get("customer_more_info").get("Date of Birth").totime().tostring("dd-MM-yyyy");
+// implementation starts here
+crm_search_resp = zoho.crm.searchRecords("Contacts", "(First_Name:equals:" + firstname + ")and(Last_Name:equals:" + lastname + ")", 1, 200, Map(), "zcrm_20086202653_1");
+if(crm_search_resp.size() == 0) // if no record found with the same email
+{
+	// create contact
+	record_map = Map();
+	record_map.put("First_Name",firstname);
+	record_map.put("Last_Name",lastname);
+	record_map.put("Phone",phone);
+	record_map.put("Email",Email);
+	record_map.put("Mailing_Street", street);
+	record_map.put("Mailing_City", city);
+	record_map.put("Mailing_Zip", zip);
+	record_map.put("Mailing_Country", mailing_country);
+	record_map.put("Project_Partner", workspace_name);
+	record_map.put("Record_Type", "Patient");
+	record_map.put("Country_Bookings",countrylist);
+	record_map.put("Lead_Source","Zoho Bookings");
+	record_map.put("DOB", Dob);
+	create_contact_resp = zoho.crm.createRecord("Contacts", record_map, {"trigger": {"workflow"}}, "zcrm_20086202653_1");
+	info {"name_not_found_contact_create": create_contact_resp};
+	contact_id = create_contact_resp.get("id");
+	// create meeting event
+	event_map = Map();
+	event_map.put("$se_module","Contacts");
+	event_map.put("Start_DateTime",start_time);
+	event_map.put("End_DateTime",end_time);
+	event_map.put("Who_Id",{"id" : contact_id});
+	event_map.put("Event_Title",bookingInfo.get("service_name"));
+	event_map.put("Staff_Name",Staff_Name);
+	event_map.put("Booking_Summary_URL",Booking_Summary_URL);
+	event_map.put("Booking_ID",booking_id);
+	createevent = zoho.crm.createRecord("Events",event_map,Map(),"zcrm_20086202653_1");
+	info {"name_not_found_event_create": createevent};
+	// create a deal
+	deal_map = Map();
+	deal_map.put("Staff_Name",Staff_Name);
+	deal_map.put("Record_Type", "Patient");
+	deal_map.put("Lead_Source", "Zoho Bookings");
+	deal_map.put("Deal_Name", Service_Name);
+	deal_map.put("Booking_ID",booking_id);
+	deal_map.put("Contact_Name",{"id": contact_id});
+	deal_map.put("Staff_Name",Staff_Name);
+	deal_map.put("Amount", Amount);
+	create_deal_resp = zoho.crm.createRecord("Deals", deal_map, {"trigger": {"workflow"}}, "zcrm_20086202653_1");
+	info {"name_not_found_deal_create": create_deal_resp};
+} else if(crm_search_resp.size() > 0) // names match
+{
+	response_size = crm_search_resp.size();
+	target_contact_record = crm_search_resp.get(response_size - 1);
+	record_email = target_contact_record.get("Email");
+	record_dob = target_contact_record.get("DOB");
+	record_id = target_contact_record.get("id");
+	
+	info {
+		"crm_search_resp": crm_search_resp,
+		"target_record": target_contact_record,
+		"target_email": record_email,
+		"target_dob": record_dob
+	};
+}
